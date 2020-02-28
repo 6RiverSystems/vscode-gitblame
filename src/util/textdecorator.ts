@@ -14,8 +14,13 @@ import {
     isBlankCommit,
 } from "../git/util/blanks";
 
+type InfoTokenFunctionWithParameter = (value: string) => string;
+type InfoTokenFunctionWithoutParameter = () => string;
+type InfoTokenFunction =
+    InfoTokenFunctionWithParameter | InfoTokenFunctionWithoutParameter;
+
 export interface InfoTokens {
-    [key: string]: (value?: string) => string;
+    [key: string]: InfoTokenFunction | undefined;
 }
 
 export interface InfoTokenNormalizedCommitInfo extends InfoTokens {
@@ -23,13 +28,15 @@ export interface InfoTokenNormalizedCommitInfo extends InfoTokens {
     "author.name": () => string;
     "author.timestamp": () => string;
     "author.tz": () => string;
+    "author.date": () => string;
     "commit.hash": () => string;
-    "commit.hash_short": (length?: string) => string;
+    "commit.hash_short": (length: string) => string;
     "commit.summary": () => string;
     "committer.mail": () => string;
     "committer.name": () => string;
     "committer.timestamp": () => string;
     "committer.tz": () => string;
+    "committer.date": () => string;
     "time.ago": () => string;
     "time.c_ago": () => string;
     "time.c_from": () => string;
@@ -50,7 +57,7 @@ interface TokenReplaceGroup {
 export class TextDecorator {
     public static toTextView(commit: GitCommitInfo): string {
         if (isBlankCommit(commit)) {
-            return container.resolve(Property).get(
+            return container.resolve<Property>("Property").get(
                 "statusBarMessageNoCommit",
             ) || "Not Committed Yet";
         }
@@ -58,7 +65,7 @@ export class TextDecorator {
         const normalizedCommitInfo = TextDecorator.normalizeCommitInfoTokens(
             commit,
         );
-        const messageFormat = container.resolve(Property).get(
+        const messageFormat = container.resolve<Property>("Property").get(
             "statusBarMessageFormat",
         );
 
@@ -88,7 +95,7 @@ export class TextDecorator {
         } else if (hours >= 1) {
             return pluralText(hours, "hour", "hours") + " ago";
         } else if (minutes >= 5) {
-            return pluralText(minutes, "minute", "minutes") + " ago";
+            return `${minutes} minutes ago`;
         } else {
             return "right now";
         }
@@ -116,7 +123,7 @@ export class TextDecorator {
             tokenRegex,
             (...args: unknown[]): string => {
                 const groups: TokenReplaceGroup
-                    = args[args.length - 1] as unknown as TokenReplaceGroup;
+                    = args[args.length - 1] as TokenReplaceGroup;
 
                 const value = TextDecorator.runKey(tokens, groups);
 
@@ -160,7 +167,9 @@ export class TextDecorator {
         }
         const ago = valueFrom(TextDecorator.toDateText(now, authorTime));
         const cAgo = valueFrom(TextDecorator.toDateText(now, committerTime));
-        const hashShort = (length = "7"): string => {
+        const authorDate = valueFrom(authorTime.toISOString().slice(0, 10));
+        const cDate = valueFrom(committerTime.toISOString().slice(0, 10));
+        const hashShort = (length = '7'): string => {
             const cutoffPoint = length.toString();
             return commit.hash.substr(
                 0,
@@ -173,6 +182,7 @@ export class TextDecorator {
             "author.name": valueFrom(commit.author.name),
             "author.timestamp": valueFrom(commit.author.timestamp),
             "author.tz": valueFrom(commit.author.tz),
+            "author.date": authorDate,
             "commit.hash": valueFrom(commit.hash),
             "commit.hash_short": hashShort,
             "commit.summary": valueFrom(commit.summary),
@@ -180,6 +190,7 @@ export class TextDecorator {
             "committer.name": valueFrom(commit.committer.name),
             "committer.timestamp": valueFrom(commit.committer.timestamp),
             "committer.tz": valueFrom(commit.committer.tz),
+            "committer.date": cDate,
             "time.ago": ago,
             "time.c_ago": cAgo,
             "time.from": ago,
